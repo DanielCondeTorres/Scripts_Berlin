@@ -1,10 +1,32 @@
-import MDAnalysis as mda
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    209,1         87import MDAnalysis as mda
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import mdtraj as md
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+# Agregar argumentos para los archivos de entrada
+parser = argparse.ArgumentParser(description='Script que procesa archivos de entrada')
+
+parser.add_argument('-f', '--pdb', required=True, help='Ruta del archivo .pdb')
+
+parser.add_argument('-m', '--map', required=True, help='Ruta del archivo .map')
+
+parser.add_argument('-x', '--xtc', required=False, help='Ruta del archivo .xtc')
+
+parser.add_argument('-d', '--dcd', required=False, help='Ruta del archivo .dcd')
+# Leer los argumentos de la línea de comandos
+args = parser.parse_args()
+# Archivos para almacenar
+#pdb_writer = md.formats.PDBTrajectoryFile('coordinadas_transformadas.pdb', mode='w', force_overwrite=True)
+# Acceder a los archivos de entrada
+
+archivo_pdb = args.pdb
+archivo_map = args.map
+archivo_xtc = args.xtc
+archivo_dcd = args.dcd
+
+
 #Funciones:
 def escribir_pdb(coordenadas, nombres, nombre_archivo="nuevas_coordenadas.pdb"):
     with open(nombre_archivo, "w") as archivo_pdb:
@@ -29,7 +51,7 @@ def escribir_xyz(coordenadas, nombres, nombre_archivo="nuevas_coordenadas.xyz"):
 
 #
 # Lee el archivo de texto
-with open('popc.amber.map', 'r') as file:
+with open(archivo_map, 'r') as file:
     lines = file.readlines()
 
 
@@ -96,26 +118,6 @@ elements = list(all_keys)
 
 #
 
-#Leemos los archivos de interés .map, .pdb y .dcd (.xtc) de atomistico
-# Agregar argumentos para los archivos de entrada
-parser = argparse.ArgumentParser(description='Script que procesa archivos de entrada')
-
-parser.add_argument('-f', '--pdb', required=True, help='Ruta del archivo .pdb')
-
-parser.add_argument('-m', '--map', required=True, help='Ruta del archivo .map')
-
-parser.add_argument('-x', '--xtc', required=False, help='Ruta del archivo .xtc')
-
-parser.add_argument('-d', '--dcd', required=False, help='Ruta del archivo .dcd')
-# Leer los argumentos de la línea de comandos
-args = parser.parse_args()
-# Archivos para almacenar
-#pdb_writer = md.formats.PDBTrajectoryFile('coordinadas_transformadas.pdb', mode='w', force_overwrite=True)
-# Acceder a los archivos de entrada
-archivo_pdb = args.pdb
-archivo_map = args.map
-archivo_xtc = args.xtc
-archivo_dcd = args.dcd
 #Leemos el sistema:
 system=mda.Universe(archivo_pdb)
 seleccion_popc = system.select_atoms("resname POP")
@@ -125,8 +127,10 @@ if archivo_xtc != None:
     system=mda.Universe(archivo_pdb,archivo_xtc)
 #mdtraj
 #traj = md.load_dcd(archivo_dcd, top=archivo_pdb)
-traj = md.load(archivo_dcd, top=archivo_pdb)
-
+if archivo_dcd != None:
+    traj = md.load(archivo_dcd, top=archivo_pdb)
+else:
+    traj=md.load(archivo_pdb, top=archivo_pdb)
 print(traj)
 topology = traj.topology
 membrane = topology.select("resname POP or resname POPC or resname POPE or resname POPS or resname CHOL")
@@ -175,48 +179,38 @@ for frame in range(traj.n_frames):
     ####################Water transformation####################
     ############################################################
     #water_coordinates = traj.xyz[frame, water_selection]
-    O_coordinates = traj.xyz[frame, OH]
-    H1_coordinates = traj.xyz[frame, H1]
-    H2_coordinates = traj.xyz[frame, H2]
-    matrices = [O_coordinates, H1_coordinates, H2_coordinates]
-    water_coordinates = np.vstack(np.column_stack(matrices).reshape(-1, matrices[0].shape[1]))
 
-    #Otra forma de hacerlo
-    '''if frame == 0:
-        print('Matrices 1: ',matrices)
-        print('Coordenadas 1: ',water_coordinates)
-        matrices = []
-        # Loop through each element in the result_dict
-        for element_key, indices in result_dict.items():
-            print('WTF',element_key,indices)
-            # Extract the coordinates for the current element
-            element_coordinates = traj.xyz[frame, indices]
-            # Append the coordinates to the list
-            matrices.append(element_coordinates)
-        print('Matrices 2: ',matrices)
-        water_coordinates2 = np.vstack(np.column_stack(matrices).reshape(-1, matrices[0].shape[1]))
-        print('Coordenadas 2: ', water_coordinates2)'''
+    if not water:
+        cg_coordinates = np.zeros((number_of_waters, 3))
+        nombres_coordenadas = []
+    else:
+        O_coordinates = traj.xyz[frame, OH]
+        H1_coordinates = traj.xyz[frame, H1]
+        H2_coordinates = traj.xyz[frame, H2]
+        matrices = [O_coordinates, H1_coordinates, H2_coordinates]
+        water_coordinates = np.vstack(np.column_stack(matrices).reshape(-1, matrices[0].shape[1]))
 
-    #Fin de otra forma
-
-    #Correccion:
-    R_split = np.split(water_coordinates,number_of_waters)
-    R_stack = np.block(R_split)
-    cg_coordinates = np.matmul(mapping_water,R_stack).reshape((number_of_waters,3))
-    nombres_coordenadas_agua = ['W']
-    nombres_coordenadas = nombres_coordenadas_agua*len(cg_coordinates)
+        #Correccion:
+        R_split = np.split(water_coordinates,number_of_waters)
+        R_stack = np.block(R_split)
+        cg_coordinates = np.matmul(mapping_water,R_stack).reshape((number_of_waters,3))
+        nombres_coordenadas_agua = ['W']
+        nombres_coordenadas = nombres_coordenadas_agua*len(cg_coordinates)
+    if not ions:
+        print('No iones')
+    else:
     ############################################################
     ####################Ions transformation####################
     ############################################################
-    positive_ions_coordinates = traj.xyz[frame, ions_positive]
+        positive_ions_coordinates = traj.xyz[frame, ions_positive]
 
-    negative_ions_coordinates = traj.xyz[frame, ions_negative]
-    nombre_coordenadas_iones_positvos = ['K']*len(positive_ions_coordinates)
-    nombre_coordenadas_iones_negativos = ['Cl']*len(negative_ions_coordinates)
-    nombres_coordenadas.extend(nombre_coordenadas_iones_positvos)
-    nombres_coordenadas.extend(nombre_coordenadas_iones_negativos)
-    cg_coordinates = np.vstack([cg_coordinates, positive_ions_coordinates])
-    cg_coordinates = np.vstack([cg_coordinates, negative_ions_coordinates])
+        negative_ions_coordinates = traj.xyz[frame, ions_negative]
+        nombre_coordenadas_iones_positvos = ['K']*len(positive_ions_coordinates)
+        nombre_coordenadas_iones_negativos = ['Cl']*len(negative_ions_coordinates)
+        nombres_coordenadas.extend(nombre_coordenadas_iones_positvos)
+        nombres_coordenadas.extend(nombre_coordenadas_iones_negativos)
+        cg_coordinates = np.vstack([cg_coordinates, positive_ions_coordinates])
+        cg_coordinates = np.vstack([cg_coordinates, negative_ions_coordinates])
 
 
 
@@ -228,9 +222,10 @@ for frame in range(traj.n_frames):
 
     # Loop through each element in the result_dict
     for element_key, indices in result_dict.items():
+        #print('INDICE :',indices,'Elemento : ', element_key)
         # Extract the coordinates for the current element
         element_coordinates = traj.xyz[frame, indices]
-
+    
         # Append the coordinates to the list
         matrices.append(element_coordinates)
 
@@ -238,10 +233,10 @@ for frame in range(traj.n_frames):
 
     # Concatenate all the matrices along the last axis (axis=2)
     lipid_coordinates = np.vstack(np.column_stack(matrices).reshape(-1, matrices[0].shape[1]))
-
+    
     R_split = np.split(lipid_coordinates,numero_lipidos_popc)
     R_stack = np.block(R_split)
-    print('Shape: ',R_stack.shape)
+    #print('Shape: ',R_stack.shape)
     for elemento in martini_list:
         sumatorio = []
 #    seleccionados = {clave: valor for clave, valor in nuevo_diccionario.items() if elemento in valor}
@@ -250,41 +245,39 @@ for frame in range(traj.n_frames):
             valor_numerico = mass.get(letra_inicial, 0)
             count_nc3 = valor.count(elemento)
             size_lista = len(valor) - 1
-            resultados= count_nc3 * valor_numerico/size_lista
-            sumatorio.append(resultados)
-            print('Elemento: ',elemento, 'Res: ',resultados, 'Cuenta: ',count_nc3, 'Value: ',valor_numerico,'Tamaño lista: ',size_lista )
-        print('Suma Total: ', sum(sumatorio), 'del elemento: ',elemento)
+            print('Valor: ',valor_numerico)
+            print('Size: ',size_lista,'Clave: ',clave)
+            if size_lista == 0:
+                resultados = 0
+                sumatorio.append(resultados)
+            else:
+                resultados= count_nc3 * valor_numerico/size_lista
+                sumatorio.append(resultados)
+            #print('Elemento: ',elemento, 'Res: ',resultados, 'Cuenta: ',count_nc3, 'Value: ',valor_numerico,'Tamaño lista: ',size_lista )
+        #print('Suma Total: ', sum(sumatorio), 'del elemento: ',elemento)
         mapping_matrix_lipid = np.array(sumatorio)/sum(sumatorio)
-        print('Elemento: ',elemento, 'con matrix Mapping: ', np.array(sumatorio)/sum(sumatorio))
+        #print('Elemento: ',elemento, 'con matrix Mapping: ', np.array(sumatorio)/sum(sumatorio))
 
         cg_coordinates_lipids = np.matmul(mapping_matrix_lipid,R_stack).reshape((numero_lipidos_popc,3))
         nombres_coordenadas_elemento = [elemento]
-        print('Elemento: ',nombres_coordenadas_elemento)
+        #print('Elemento: ',nombres_coordenadas_elemento)
         nombres_coordenadas_lipido = nombres_coordenadas_elemento*len(cg_coordinates_lipids)
-
+        
         nombres_coordenadas.extend(nombres_coordenadas_lipido)
         cg_coordinates = np.vstack([cg_coordinates, cg_coordinates_lipids])
 
     ############################################################
 
-
-
-
-
-
-
-
-
-
     # Escribir las coordenadas transformadas en el archivo DCD
     #dcd_writer.write(cg_coordinates_3d)
-    if frame == 1:
-        escribir_pdb(cg_coordinates,nombres_coordenadas)
-    escribir_xyz(cg_coordinates,nombres_coordenadas)
+    if frame == 0:
+        escribir_pdb(cg_coordinates*10,nombres_coordenadas)
+    escribir_xyz(cg_coordinates*10,nombres_coordenadas)
         #print(cg_coordinates,nombres_coordenadas)
-    #if frame == 10:
-    #    break
-
+    if frame == 10:
+        break
+    
+'''
 fig = plt.figure(figsize=(8,7))
 
 ax = fig.add_subplot(111, projection='3d')
@@ -305,13 +298,10 @@ ax.scatter(R_H2[:,0], R_H2[:,1], R_H2[:,2], s=10, c="green", depthshade=False)
 #plt.show()
 
 
-
+'''
 
 #Save trayectory as .dcd
 a=md.load('nuevas_coordenadas.xyz', top='nuevas_coordenadas.pdb')
 # Guardar la trayectoria en un archivo DCD
 a.save_dcd('nueva_trayectoria_a.dcd')
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    310,1       Final
-
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    209,1         87%
-
+print("Martini List:", martini_list)
