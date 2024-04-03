@@ -103,7 +103,7 @@ def create_martini_cg(pdb_file:str, map_file:str, system:dict, new_top:dict, pat
             md_elem = element_map[elem[0]]
 
             #Duda en el c_inicial
-            new_atom = new_top.add_atom(f"{elem}{j}", md_elem, new_top.residue(i+c_inicial))
+            new_atom = new_top.add_atom(f"{elem}{j}", md_elem, new_top.residue(i+c_inicial-1))
             
         for enlace in enlaces_definidos:
             bead1_index, bead2_index = enlace
