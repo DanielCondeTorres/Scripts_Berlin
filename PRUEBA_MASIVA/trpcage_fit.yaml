@@ -1,0 +1,9 @@
+save_dir: /mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS/test_def_MASIVA_ARCO
+prior_tag: cgschnet
+embedding_map: cg_mapping #input_generator.CGEmbeddingMapFiveBead
+
+#Added to membrane case
+pdb_path_aa: /mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS/input_openmm.pdb
+map_path_aa: /mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS/popc.charmm36.map
+itp_path_cg: /mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS/popc.itp
+

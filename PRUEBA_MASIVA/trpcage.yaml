@@ -1,0 +1,40 @@
+dataset_name: 2JOF  #Nombre de los datos
+names: [2JOF] # Poner entre corchetes mismo nombre que arriba
+sample_loader: input_generator.Membrane_loader        #input_generator.Trpcage_loader
+tag: ""
+raw_data_dir: /mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS
+#Memrana
+#/mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS    #/mnt/lustre/scratch/nlsas/home/usc/cq/dct/mlcg-tools-main/examples/notebooks/trajectories/raw #Donde están los datos .npy o .npz
+save_dir: /mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS/test_def_MASIVA_ARCO #Donde almacenamos los datos
+pdb_template_fn: /mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS/input_openmm.pdb #pdb de referencia
+cg_atoms:
+#- N
+#- CA
+#- CB
+#- C
+#- O
+#Creo que esto da un poco igual?
+- NC3 
+- PO4 
+- GL1 
+- GL2 
+- C1A 
+- D2A 
+- C3A 
+- C4A 
+- C1B 
+- C2B 
+- C3B 
+- C4B
+embedding_map: cg_mapping #input_generator.CGEmbeddingMapFiveBead
+embedding_func: cg_mapping #input_generator.embedding_fivebead
+skip_residues:
+- ACE
+- NME
+use_terminal_embeddings: false
+cg_mapping_strategy: cg_mapping
+
+#Added to membrane case
+pdb_path_aa: /mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS/input_openmm.pdb
+map_path_aa: /mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS/popc.charmm36.map
+itp_path_cg: /mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS/popc.itp

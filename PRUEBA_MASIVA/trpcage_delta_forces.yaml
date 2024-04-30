@@ -1,0 +1,8 @@
+dataset_name: 2JOF
+names: [2JOF]
+tag: ""
+save_dir: /mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS/test_def_MASIVA_ARCO
+prior_tag: cgschnet
+prior_fn: /mnt/lustre/hsm/nlsas/notape/home/usc/qo/supepmem/DANIEL/75_per_leaflet/simulacion_openmm/NVT_TODAS/test_def_MASIVA_ARCO/cgschnet_prior_model.pt
+batch_size: 10
+device: cuda
