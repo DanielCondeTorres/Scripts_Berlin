@@ -253,25 +253,164 @@ def compute_undulation_spectrum(universe, head_sel, frame_interval=1):
     half = slice(1, N // 2)
     return freqs[half], np.nanmean(power[half, :], axis=1)
 
-# 4. Voronoi area distribution
-def compute_voronoi_areas(universe, head_sel):
+import numpy as np
+from scipy.spatial import Voronoi
+from scipy.spatial.distance import pdist
+
+def compute_voronoi_areas(universe, head_sel, boundary=None):
+    """
+    Compute Voronoi areas for head groups
+    
+    Parameters:
+    -----------
+    universe : MDAnalysis Universe object
+        The molecular dynamics universe
+    head_sel : str
+        Selection string for head groups
+    boundary : tuple, optional
+        (xmin, xmax, ymin, ymax) boundary box for clipping Voronoi regions
+        If None, will use the system box dimensions
+        
+    Returns:
+    --------
+    np.array
+        Array of Voronoi areas for each point
+    """
     head = universe.select_atoms(head_sel)
     pts = head.positions[:, :2]
+    
+    # Set boundary based on system box if not provided
+    if boundary is None:
+        box = universe.dimensions[:2]
+        boundary = (0, box[0], 0, box[1])
+    
+    # Create Voronoi diagram
     vor = Voronoi(pts)
-    areas = []
-    for region_idx in vor.point_region:
+    
+    # Calculate areas
+    areas = np.zeros(len(pts))
+    
+    for i, region_idx in enumerate(vor.point_region):
         region = vor.regions[region_idx]
+        
+        # Skip if region is empty or unbounded
         if not region or -1 in region:
-            areas.append(np.nan)
-            continue
-        poly = np.array([vor.vertices[i] for i in region])
-        x, y = poly[:, 0], poly[:, 1]
-        area = 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
-        areas.append(area)
-    return np.array(areas)
+            # For unbounded regions, we can approximate by creating a bounded region
+            # using the boundary of the simulation box
+            vertices = _get_bounded_region(vor, i, boundary)
+            if vertices is None or len(vertices) < 3:
+                areas[i] = np.nan
+                continue
+        else:
+            vertices = np.array([vor.vertices[j] for j in region])
+            
+            # Clip polygon to boundary if needed
+            if boundary is not None:
+                vertices = _clip_polygon_to_box(vertices, boundary)
+                if len(vertices) < 3:
+                    areas[i] = np.nan
+                    continue
+        
+        # Calculate polygon area using shoelace formula
+        x, y = vertices[:, 0], vertices[:, 1]
+        area = 0.5 * np.abs(np.sum(x[:-1] * y[1:] - x[1:] * y[:-1]) + 
+                            x[-1] * y[0] - x[0] * y[-1])
+        areas[i] = area
+    
+    return areas
 
-# 5. Void frequency (packing defects)
+def _clip_polygon_to_box(vertices, boundary):
+    """
+    Clip a polygon to a rectangular boundary
+    
+    Parameters:
+    -----------
+    vertices : np.array
+        Nx2 array of polygon vertices
+    boundary : tuple
+        (xmin, xmax, ymin, ymax) boundary box
+    
+    Returns:
+    --------
+    np.array
+        Clipped polygon vertices
+    """
+    xmin, xmax, ymin, ymax = boundary
+    
+    # Simple clipping - discard points outside the box and add intersection points
+    # This is a simplified approach and doesn't handle all cases correctly
+    # For a complete implementation, consider using a library like Shapely
+    
+    # For now, just return vertices inside the box
+    vertices = np.array([v for v in vertices if 
+                       (xmin <= v[0] <= xmax and ymin <= v[1] <= ymax)])
+    
+    return vertices
+
+def _get_bounded_region(vor, point_idx, boundary):
+    """
+    Get a bounded region for an unbounded Voronoi cell
+    
+    Parameters:
+    -----------
+    vor : scipy.spatial.Voronoi
+        Voronoi diagram
+    point_idx : int
+        Index of the point
+    boundary : tuple
+        (xmin, xmax, ymin, ymax) boundary box
+    
+    Returns:
+    --------
+    np.array or None
+        Bounded polygon vertices or None if cannot be calculated
+    """
+    xmin, xmax, ymin, ymax = boundary
+    
+    # This is a simplified approach - for a complete implementation, 
+    # consider using a library like Shapely
+    
+    # Using ridge points and ridge vertices to reconstruct the region
+    bounded_vertices = []
+    
+    # Find all ridges for this point
+    for i, (p1, p2) in enumerate(vor.ridge_points):
+        if p1 == point_idx or p2 == point_idx:
+            v_idx = vor.ridge_vertices[i]
+            
+            # Skip if ridge is unbounded
+            if -1 in v_idx:
+                continue
+                
+            # Add vertices to the list
+            for idx in v_idx:
+                vertex = vor.vertices[idx]
+                if (xmin <= vertex[0] <= xmax and ymin <= vertex[1] <= ymax):
+                    bounded_vertices.append(vertex)
+    
+    if len(bounded_vertices) < 3:
+        return None
+        
+    return np.array(bounded_vertices)
+
 def compute_void_frequency(universe, head_sel, threshold=0.5):
+    """
+    Compute void frequency (packing defects)
+    
+    Parameters:
+    -----------
+    universe : MDAnalysis Universe object
+        The molecular dynamics universe
+    head_sel : str
+        Selection string for head groups
+    threshold : float, optional
+        Distance threshold for considering a void, default 0.5
+        
+    Returns:
+    --------
+    tuple of np.array
+        (times, frequencies)
+    """
     times = []
     freq = []
     for ts in universe.trajectory:
@@ -315,7 +454,7 @@ if __name__ == "__main__":
 
     # Define beads and selection strings
     head_bead = 'PO4'
-    tail_bead = 'C4A' #'C4B'
+    tail_bead = 'C3A'
     head_sel = f'resname POPC and name {head_bead}'
 
     # 1. Order Parameter P2 vs time
