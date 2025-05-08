@@ -314,8 +314,8 @@ if __name__ == "__main__":
     u = mda.Universe(args.pdb, args.xtc)
 
     # Define beads and selection strings
-    head_bead = 'GL1'
-    tail_bead = 'GL2'
+    head_bead = 'PO4'
+    tail_bead = 'C4A' #'C4B'
     head_sel = f'resname POPC and name {head_bead}'
 
     # 1. Order Parameter P2 vs time
