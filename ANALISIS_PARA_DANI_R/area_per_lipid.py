@@ -49,81 +49,89 @@ def calculate_area_per_lipid(universe, lipid_selection='resname POPC'):
 
 def calculate_rdf(universe, selection1='name P or name PO4 or name P8', selection2='name P or name PO4 or name P8'):
     """Calculate radial distribution function"""
-    # Select atoms
     group1 = universe.select_atoms(selection1)
     group2 = universe.select_atoms(selection2)
-    
-    # Ensure there are sufficient atoms
+
     print(f"Number of atoms in first selection: {len(group1)}")
     print(f"Number of atoms in second selection: {len(group2)}")
-    
+
     if len(group1) == 0 or len(group2) == 0:
         print("Error: One or both atom selections are empty")
         return None
-    
-    # RDF parameters
+
     rdf_range = (1.0, 20.0)
     nbins = 200
-    
-    # Calculate RDF
+
     rdf = InterRDF(group1, group2, nbins=nbins, range=rdf_range, norm='density')
     rdf.run()
-    
-    # Plot results
-    plt.figure(figsize=(8, 6))
-    plt.plot(rdf.bins, rdf.rdf, label=f'RDF {selection1}-{selection2}')
-    plt.xlabel('Distance (Å)')
-    plt.ylabel('RDF')
-    plt.title(f'Radial Distribution Function between {selection1} and {selection2}')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(f'rdf_{selection1.replace(" ", "_")}_{selection2.replace(" ", "_")}.png')
-    
+
+    # Plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(rdf.bins, rdf.rdf, label=f'RDF {selection1}-{selection2}', color='darkgreen', linewidth=2)
+
+    plt.xlabel('Distance (Å)', fontsize=14)
+    plt.ylabel('Radial Distribution Function (g(r))', fontsize=14)
+    plt.title(f'Radial Distribution Function: {selection1} vs {selection2}', fontsize=16)
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+    plt.legend(fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    plt.savefig(f'rdf_{selection1.replace(" ", "_")}_{selection2.replace(" ", "_")}.png', dpi=300)
+
     return rdf
 
-def calculate_membrane_thickness(universe):
-    """Calculate membrane thickness"""
-    # Find leaflets with more robust parameters
+
+def calculate_membrane_thickness(universe, window=10):
+    """Calculate and plot membrane thickness over time with moving average."""
     L = LeafletFinder(universe, 'name P or name PO4 or name P8', cutoff=15.0, pbc=True)
-    
-    # Check if enough leaflets were found
+
     if len(L.components) < 2:
         print(f"Warning: Only {len(L.components)} leaflets were identified. Need 2 for thickness calculation.")
         return None
-    
-    # Get the two leaflets
+
     leaflet1 = L.groups(0)
     leaflet2 = L.groups(1)
-    
+
     print(f"Leaflet 1 contains {len(leaflet1)} lipids")
     print(f"Leaflet 2 contains {len(leaflet2)} lipids")
-    
-    # Calculate thickness over time
+
     thicknesses = []
     time = []
     for ts in universe.trajectory:
-        z_positions_leaflet1 = leaflet1.positions[:, 2]
-        z_positions_leaflet2 = leaflet2.positions[:, 2]
-        mean_z_leaflet1 = np.mean(z_positions_leaflet1)
-        mean_z_leaflet2 = np.mean(z_positions_leaflet2)
-        thickness = np.abs(mean_z_leaflet1 - mean_z_leaflet2)
-        thicknesses.append(thickness)
-        time.append(ts.time)
-    print('Time: ', time)
+        z1 = np.mean(leaflet1.positions[:, 2])
+        z2 = np.mean(leaflet2.positions[:, 2])
+        thicknesses.append(np.abs(z1 - z2))
+        time.append(ts.time / 1000000.0)  # ps to µs
+
     thicknesses = np.array(thicknesses)
+    time = np.array(time)
     np.savetxt('membrane_thickness.txt', thicknesses)
-    
-    # Plot results
-    plt.figure(figsize=(8, 6))
-    plt.plot(time, thicknesses, label='Membrane Thickness')
-    plt.xlabel('Time (ps)')
-    plt.ylabel('Thickness (Å)')
-    plt.title('Membrane Thickness over Time')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig('membrane_thickness.png')
-    
-    print(f'Average membrane thickness: {np.mean(thicknesses):.2f}±{np.std(thicknesses):.2f} Å')
+
+    # Moving average
+    if len(thicknesses) >= window:
+        moving_avg = np.convolve(thicknesses, np.ones(window) / window, mode='valid')
+        time_smooth = time[:len(moving_avg)]
+    else:
+        moving_avg = thicknesses
+        time_smooth = time
+
+    # Plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(time, thicknesses, label='Raw Thickness', color='skyblue', linewidth=1.5, alpha=0.6)
+    plt.plot(time_smooth, moving_avg, label=f'{window}-frame Moving Average', color='navy', linewidth=2.5)
+
+    plt.xlabel('Time (µs)', fontsize=14)
+    plt.ylabel('Thickness (Å)', fontsize=14)
+    plt.title('Membrane Thickness Over Time', fontsize=16)
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+    plt.legend(fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    plt.savefig('membrane_thickness.png', dpi=300)
+
+    print(f'Average membrane thickness: {np.mean(thicknesses):.2f} ± {np.std(thicknesses):.2f} Å')
     return thicknesses
 
 def main():
@@ -158,3 +166,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
