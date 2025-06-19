@@ -27,7 +27,7 @@ def calculate_rdf_matrix(u, selections, rdf_range, nbins):
         for sel2 in selections:
             g2 = u.select_atoms(sel2)
             if len(g2)==0: continue
-            rdf = InterRDF(g1, g2, nbins=nbins, range=rdf_range, norm='density')
+            rdf = InterRDF(g1, g2, nbins=nbins, range=rdf_range, norm='rdf')
             rdf.run()
             rdf_data[sel1][sel2] = (rdf.bins, rdf.rdf)
             # save each text file if desired
