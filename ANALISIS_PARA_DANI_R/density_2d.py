@@ -88,3 +88,45 @@ def plot_density_z(z_centers, H_heads, H_tails, output):
     plt.title("Z-density profile of lipids", fontsize=18)
     plt.legend(fontsize=14)
     plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.grid(alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(f"{output}_densityZ.png", dpi=300)
+    plt.show()
+
+def main():
+    args = parse_args()
+
+    if not os.path.exists(args.pdb):
+        print(f"Error: {args.pdb} does not exist")
+        sys.exit(1)
+    if not os.path.exists(args.dcd):
+        print(f"Error: {args.dcd} does not exist")
+        sys.exit(1)
+
+    print(f"Loading universe: {args.pdb}, {args.dcd}")
+    universe = mda.Universe(args.pdb, args.dcd)
+    print(f"Atoms: {len(universe.atoms)}, Frames: {len(universe.trajectory)}")
+
+    heads, tails = detect_groups(universe, args.sel)
+
+    z_centers, H_heads, H_tails = calculate_density_z(
+        universe, heads, tails, bins=args.bins,
+        start=args.start, stop=args.stop, step=args.step
+    )
+
+    np.savetxt(f"{args.o}_densityZ_heads.txt", np.column_stack((z_centers, H_heads)),
+               header="Z (Å)\tNormalized density (heads)")
+    np.savetxt(f"{args.o}_densityZ_tails.txt", np.column_stack((z_centers, H_tails)),
+               header="Z (Å)\tNormalized density (tails)")
+
+    plot_density_z(z_centers, H_heads, H_tails, args.o)
+
+    print("\n=== RESULTS ===")
+    print(f"- {args.o}_densityZ_heads.txt")
+    print(f"- {args.o}_densityZ_tails.txt")
+    print(f"- {args.o}_densityZ.png")
+
+if __name__ == "__main__":
+    main()
