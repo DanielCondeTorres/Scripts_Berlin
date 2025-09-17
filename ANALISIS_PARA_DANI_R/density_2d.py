@@ -1,14 +1,11 @@
+
 #!/usr/bin/env python3
 """
-Script to compute the Z-density profile of lipids (heads vs tails).
+Script to compute the Z-density profile of lipids (heads vs tails),
+centered on the membrane COM.
 
 Usage:
     python density_z.py -pdb structure.pdb -dcd trajectory.dcd
-
-Output:
-    - densityZ_heads.txt (normalized profile of head atoms)
-    - densityZ_tails.txt (normalized profile of tail atoms)
-    - densityZ.png (figure with Z-density profile)
 """
 
 import argparse
@@ -49,10 +46,10 @@ def detect_groups(universe, lipid_sel):
     print(f"Lipids detected: {len(lipids.residues)}")
     print(f"Head atoms: {len(heads)}")
     print(f"Tail atoms: {len(tails)}")
-    return heads, tails
+    return lipids, heads, tails
 
-def calculate_density_z(universe, heads, tails, bins=100, start=None, stop=None, step=None):
-    """Compute normalized Z-density profile"""
+def calculate_density_z(universe, lipids, heads, tails, bins=100, start=None, stop=None, step=None):
+    """Compute normalized Z-density profile centered at membrane COM"""
     traj = universe.trajectory
     n_frames = len(traj)
 
@@ -64,10 +61,17 @@ def calculate_density_z(universe, heads, tails, bins=100, start=None, stop=None,
     all_tails_z = []
 
     for ts in traj[start:stop:step]:
-        all_heads_z.extend(heads.positions[:, 2])
-        all_tails_z.extend(tails.positions[:, 2])
+        # Center Z coordinates at membrane COM
+        com_z = lipids.center_of_mass()[2]
+        heads_z = heads.positions[:, 2] - com_z
+        tails_z = tails.positions[:, 2] - com_z
 
-    z_min, z_max = 0, ts.dimensions[2]
+        all_heads_z.extend(heads_z)
+        all_tails_z.extend(tails_z)
+
+    # Define range based on min/max after centering
+    z_min = min(np.min(all_heads_z), np.min(all_tails_z))
+    z_max = max(np.max(all_heads_z), np.max(all_tails_z))
 
     H_heads, edges = np.histogram(all_heads_z, bins=bins, range=(z_min, z_max), density=True)
     H_tails, _     = np.histogram(all_tails_z, bins=bins, range=(z_min, z_max), density=True)
@@ -83,16 +87,15 @@ def plot_density_z(z_centers, H_heads, H_tails, output):
     plt.fill_between(z_centers, H_heads, color="red", alpha=0.3)
     plt.fill_between(z_centers, H_tails, color="purple", alpha=0.3)
 
-    plt.xlabel("Z height (Å)", fontsize=16)
+    plt.xlabel("Z (Å) relative to membrane COM", fontsize=16)
     plt.ylabel("Normalized density", fontsize=16)
-    plt.title("Z-density profile of lipids", fontsize=18)
+    plt.title("Z-density profile of lipids (centered)", fontsize=18)
     plt.legend(fontsize=14)
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     plt.grid(alpha=0.3)
-
     plt.tight_layout()
-    plt.savefig(f"{output}_densityZ.png", dpi=300)
+    plt.savefig(f"{output}_densityZ_centered.png", dpi=300)
     plt.show()
 
 def main():
@@ -109,24 +112,24 @@ def main():
     universe = mda.Universe(args.pdb, args.dcd)
     print(f"Atoms: {len(universe.atoms)}, Frames: {len(universe.trajectory)}")
 
-    heads, tails = detect_groups(universe, args.sel)
+    lipids, heads, tails = detect_groups(universe, args.sel)
 
     z_centers, H_heads, H_tails = calculate_density_z(
-        universe, heads, tails, bins=args.bins,
+        universe, lipids, heads, tails, bins=args.bins,
         start=args.start, stop=args.stop, step=args.step
     )
 
-    np.savetxt(f"{args.o}_densityZ_heads.txt", np.column_stack((z_centers, H_heads)),
-               header="Z (Å)\tNormalized density (heads)")
-    np.savetxt(f"{args.o}_densityZ_tails.txt", np.column_stack((z_centers, H_tails)),
-               header="Z (Å)\tNormalized density (tails)")
+    np.savetxt(f"{args.o}_densityZ_heads_centered.txt", np.column_stack((z_centers, H_heads)),
+               header="Z (Å) relative to COM\tNormalized density (heads)")
+    np.savetxt(f"{args.o}_densityZ_tails_centered.txt", np.column_stack((z_centers, H_tails)),
+               header="Z (Å) relative to COM\tNormalized density (tails)")
 
     plot_density_z(z_centers, H_heads, H_tails, args.o)
 
     print("\n=== RESULTS ===")
-    print(f"- {args.o}_densityZ_heads.txt")
-    print(f"- {args.o}_densityZ_tails.txt")
-    print(f"- {args.o}_densityZ.png")
+    print(f"- {args.o}_densityZ_heads_centered.txt")
+    print(f"- {args.o}_densityZ_tails_centered.txt")
+    print(f"- {args.o}_densityZ_centered.png")
 
 if __name__ == "__main__":
     main()
