@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-Script para calcular el perfil de densidad 2D de lípidos (cabezas vs colas).
+Script to compute the Z-density profile of lipids (heads vs tails).
 
-Uso:
-    python lipid_density_2d.py -pdb estructura.pdb -dcd trayectoria.dcd
+Usage:
+    python density_z.py -pdb structure.pdb -dcd trajectory.dcd
 
-Salida:
-    - Mapas de densidad 2D (colas en morado, cabezas en rojo)
-    - Archivos de texto con los histogramas
+Output:
+    - densityZ_heads.txt (normalized profile of head atoms)
+    - densityZ_tails.txt (normalized profile of tail atoms)
+    - densityZ.png (figure with Z-density profile)
 """
 
 import argparse
@@ -17,44 +18,41 @@ import numpy as np
 import matplotlib.pyplot as plt
 import MDAnalysis as mda
 
-# Posibles nombres de átomos de cabeza (headgroups)
+# Possible atom names in lipid headgroups
 HEADGROUP_NAMES = [
     "PO4", "P", "ROH", "NH3", "CNO", "GL1", "GL2", "O.*", "N.*"
 ]
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Perfil de densidad 2D de lípidos")
-    parser.add_argument("-pdb", required=True, help="Archivo PDB")
-    parser.add_argument("-dcd", required=True, help="Archivo DCD")
-    parser.add_argument("-sel", default="resname DPPC DOPC POPC", help="Selección de lípidos")
-    parser.add_argument("-start", type=int, default=None, help="Frame inicial")
-    parser.add_argument("-stop", type=int, default=None, help="Frame final")
-    parser.add_argument("-step", type=int, default=None, help="Paso entre frames")
-    parser.add_argument("-o", default="lipid_density2D", help="Prefijo de salida")
-    parser.add_argument("-bins", type=int, default=100, help="Número de bins en XY")
+    parser = argparse.ArgumentParser(description="Z-density profile of lipids")
+    parser.add_argument("-pdb", required=True, help="PDB structure file")
+    parser.add_argument("-dcd", required=True, help="DCD trajectory file")
+    parser.add_argument("-sel", default="resname DPPC DOPC POPC", help="Lipid selection")
+    parser.add_argument("-start", type=int, default=None, help="First frame to analyze")
+    parser.add_argument("-stop", type=int, default=None, help="Last frame to analyze")
+    parser.add_argument("-step", type=int, default=None, help="Step between frames")
+    parser.add_argument("-o", default="lipid_densityZ", help="Output prefix")
+    parser.add_argument("-bins", type=int, default=100, help="Number of bins along Z")
     return parser.parse_args()
 
 def detect_groups(universe, lipid_sel):
-    """Detecta automáticamente átomos de cabeza y de cola en los lípidos"""
+    """Detect head and tail atoms automatically in lipids"""
     lipids = universe.select_atoms(lipid_sel)
     if len(lipids) == 0:
-        print(f"Error: no se encontraron lípidos con selección '{lipid_sel}'")
+        print(f"Error: no lipids found with selection '{lipid_sel}'")
         sys.exit(1)
 
-    # Headgroups = átomos que matchean nombres conocidos
     head_sel_query = " or ".join([f"name {name}" for name in HEADGROUP_NAMES])
     heads = lipids.select_atoms(head_sel_query)
-
-    # Colas = el resto de átomos de los lípidos
     tails = lipids.difference(heads)
 
-    print(f"Lípidos: {len(lipids.residues)}");
-    print(f"Átomos de cabeza: {len(heads)}")
-    print(f"Átomos de cola: {len(tails)}")
+    print(f"Lipids detected: {len(lipids.residues)}")
+    print(f"Head atoms: {len(heads)}")
+    print(f"Tail atoms: {len(tails)}")
     return heads, tails
 
-def calculate_density(universe, heads, tails, bins=100, start=None, stop=None, step=None):
-    """Calcula histogramas 2D de densidad para cabezas y colas"""
+def calculate_density_z(universe, heads, tails, bins=100, start=None, stop=None, step=None):
+    """Compute normalized Z-density profile"""
     traj = universe.trajectory
     n_frames = len(traj)
 
@@ -62,98 +60,31 @@ def calculate_density(universe, heads, tails, bins=100, start=None, stop=None, s
     stop = stop if stop is not None else n_frames
     step = step if step is not None else 1
 
-    heads_hist = None
-    tails_hist = None
+    all_heads_z = []
+    all_tails_z = []
 
-    for i, ts in enumerate(traj[start:stop:step]):
-        # Coordenadas XY
-        h_xy = heads.positions[:, :2]
-        t_xy = tails.positions[:, :2]
+    for ts in traj[start:stop:step]:
+        all_heads_z.extend(heads.positions[:, 2])
+        all_tails_z.extend(tails.positions[:, 2])
 
-        # Límites de la caja
-        Lx, Ly = ts.dimensions[0], ts.dimensions[1]
+    z_min, z_max = 0, ts.dimensions[2]
 
-        # Histograma 2D
-        Hh, xedges, yedges = np.histogram2d(h_xy[:,0], h_xy[:,1], bins=bins, range=[[0,Lx],[0,Ly]])
-        Ht, _, _ = np.histogram2d(t_xy[:,0], t_xy[:,1], bins=bins, range=[[0,Lx],[0,Ly]])
+    H_heads, edges = np.histogram(all_heads_z, bins=bins, range=(z_min, z_max), density=True)
+    H_tails, _     = np.histogram(all_tails_z, bins=bins, range=(z_min, z_max), density=True)
 
-        if heads_hist is None:
-            heads_hist = Hh
-            tails_hist = Ht
-        else:
-            heads_hist += Hh
-            tails_hist += Ht
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    return centers, H_heads, H_tails
 
-    # Normalizar por número de frames
-    heads_hist = heads_hist / ((stop-start)//step)
-    tails_hist = tails_hist / ((stop-start)//step)
+def plot_density_z(z_centers, H_heads, H_tails, output):
+    """Plot Z-density profile for head and tail atoms"""
+    plt.figure(figsize=(8, 6))
+    plt.plot(z_centers, H_heads, 'r-', lw=2, label="Heads")
+    plt.plot(z_centers, H_tails, color="purple", lw=2, label="Tails")
+    plt.fill_between(z_centers, H_heads, color="red", alpha=0.3)
+    plt.fill_between(z_centers, H_tails, color="purple", alpha=0.3)
 
-    return heads_hist, tails_hist, xedges, yedges
-
-def plot_density(heads_hist, tails_hist, xedges, yedges, output):
-    """Genera la figura con cabezas en rojo y colas en morado"""
-    plt.figure(figsize=(10,8))
-
-    # Transponer para que coincidan los ejes
-    H_heads = heads_hist.T
-    H_tails = tails_hist.T
-
-    # Crear imagen combinada (RGB)
-    # Normalización por intensidad máxima
-    H_heads /= H_heads.max() if H_heads.max() > 0 else 1
-    H_tails /= H_tails.max() if H_tails.max() > 0 else 1
-
-    rgb_image = np.zeros((H_heads.shape[0], H_heads.shape[1], 3))
-    rgb_image[:,:,0] = H_heads   # Rojo = cabezas
-    rgb_image[:,:,2] = H_tails   # Azul = colas → morado
-
-    plt.imshow(rgb_image, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], aspect='equal')
-    plt.xlabel("X (Å)")
-    plt.ylabel("Y (Å)")
-    plt.title("Perfil de densidad 2D de lípidos (rojo=cabezas, morado=colas)")
-    plt.colorbar(plt.cm.ScalarMappable(cmap="Reds"), label="Cabezas (intensidad relativa)", fraction=0.046)
-    plt.colorbar(plt.cm.ScalarMappable(cmap="Purples"), label="Colas (intensidad relativa)", fraction=0.046)
-    plt.tight_layout()
-    plt.savefig(f"{output}_density2D.png", dpi=300)
-    plt.show()
-
-def main():
-    args = parse_args()
-
-    # Validar archivos
-    if not os.path.exists(args.pdb):
-        print(f"Error: {args.pdb} no existe")
-        sys.exit(1)
-    if not os.path.exists(args.dcd):
-        print(f"Error: {args.dcd} no existe")
-        sys.exit(1)
-
-    # Cargar universo
-    print(f"Cargando universo: {args.pdb}, {args.dcd}")
-    universe = mda.Universe(args.pdb, args.dcd)
-    print(f"Átomos: {len(universe.atoms)}, Frames: {len(universe.trajectory)}")
-
-    # Detectar cabezas y colas
-    heads, tails = detect_groups(universe, args.sel)
-
-    # Calcular densidad
-    heads_hist, tails_hist, xedges, yedges = calculate_density(
-        universe, heads, tails, bins=args.bins,
-        start=args.start, stop=args.stop, step=args.step
-    )
-
-    # Guardar histogramas
-    np.savetxt(f"{args.o}_heads_hist.txt", heads_hist, fmt="%.6f")
-    np.savetxt(f"{args.o}_tails_hist.txt", tails_hist, fmt="%.6f")
-
-    # Graficar
-    plot_density(heads_hist, tails_hist, xedges, yedges, args.o)
-
-    print("\n=== RESULTADOS ===")
-    print(f"Archivos guardados:")
-    print(f"- {args.o}_heads_hist.txt")
-    print(f"- {args.o}_tails_hist.txt")
-    print(f"- {args.o}_density2D.png")
-
-if __name__ == "__main__":
-    main()
+    plt.xlabel("Z height (Å)", fontsize=16)
+    plt.ylabel("Normalized density", fontsize=16)
+    plt.title("Z-density profile of lipids", fontsize=18)
+    plt.legend(fontsize=14)
+    plt.xticks(fontsize=14)
