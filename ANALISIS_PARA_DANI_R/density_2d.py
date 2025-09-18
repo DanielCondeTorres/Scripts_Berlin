@@ -17,8 +17,8 @@ import MDAnalysis as mda
 
 # Possible atom names in lipid headgroups
 HEADGROUP_NAMES = [
-    "PO4", "P", "ROH", "NH3", "CNO", "GL1", "GL2", "O.*", "N.*"
-]
+    "PO4","P8", "P","PO8","PO42" ,"ROH", "NH3", "CNO", "GL1", "GL2", "O.", "N."
+] 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Z-density profile of lipids")
